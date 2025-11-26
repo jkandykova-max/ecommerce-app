@@ -184,7 +184,7 @@ with tab_model:
     st.write(f"**Модель:** {BEST_MODEL_NAME}")
     st.write(f"**Accuracy:** {BEST_ACC:.3f}")
     st.write(f"**F1-score:** {BEST_F1:.3f}")
-    st.info("Поменяйте эти числа на реальные из ноутбука Step 4.")
+   
 
     st.markdown("----")
     st.markdown("### Сделать прогноз")
