@@ -13,31 +13,34 @@ from scipy.sparse import hstack
 
 @st.cache_resource
 def load_model_and_tools():
-    model = joblib.load("best_model.pkl")
-    tfidf = joblib.load("tfidf.pkl")
-    scaler = joblib.load("scaler.pkl")
+    try:
+        model = joblib.load("best_model.pkl")
+        tfidf = joblib.load("tfidf.pkl")
+        scaler = joblib.load("scaler.pkl")
+    except FileNotFoundError as e:
+        st.error(f"Файл {e.filename} не найден. "
+                 "Убедитесь, что best_model.pkl, tfidf.pkl и scaler.pkl лежат рядом с app.py в репозитории.")
+        st.stop()
     return model, tfidf, scaler
 
 model, tfidf, scaler = load_model_and_tools()
 
 # ПОДСТАВЬ СВОИ МЕТРИКИ!
-BEST_MODEL_NAME = "Random Forest"   
-BEST_ACC = 0.85                     
-BEST_F1 = 0.84                      
+BEST_MODEL_NAME = "Random Forest"      # или Logistic Regression
+BEST_ACC = 0.85                        # поменяй на реальные значения
+BEST_F1 = 0.84                         # поменяй на реальные значения
 
 # ===============================
 # 2. ФУНКЦИИ ДЛЯ РАБОТЫ С ДАННЫМИ
 # ===============================
 
 @st.cache_data
-def load_data_from_file(uploaded_file=None):
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file, encoding="latin1")
-    else:
-        df = pd.read_csv("data.csv", encoding="latin1")
+def load_data_from_file(uploaded_file):
+    # В облаке работаем ТОЛЬКО с файлом, загруженным пользователем
+    df = pd.read_csv(uploaded_file, encoding="latin1")
     return df
 
-def prepare_product_level_df(df: pd.DataFrame) -> pd.DataFrame:
+def prepare_product_level_df(df: pd.DataFrame):
     df = df.copy()
     df = df[df["Quantity"] > 0]
     df = df.dropna(subset=["Description"])
@@ -93,67 +96,82 @@ tab_eda, tab_model = st.tabs(["📊 Data Overview & EDA", "🤖 Predictive Model
 with tab_eda:
     st.subheader("Разведочный анализ данных (EDA)")
 
-    uploaded_file = st.file_uploader("Загрузите CSV с данными (по желанию)", type=["csv"])
+    st.markdown("Загрузите CSV-файл с данными (например, Ecommerce Data) для просмотра EDA.")
+    uploaded_file = st.file_uploader("Загрузите CSV с данными", type=["csv"])
 
-    df = load_data_from_file(uploaded_file)
+    if uploaded_file is None:
+        st.info("Файл ещё не загружен. Загрузите CSV, чтобы увидеть анализ.")
+    else:
+        df = load_data_from_file(uploaded_file)
 
-    st.write("Первые строки набора данных:")
-    st.dataframe(df.head())
+        st.write("Первые строки набора данных:")
+        st.dataframe(df.head())
 
-    st.write("Размер датасета:", df.shape)
+        st.write("Размер датасета:", df.shape)
 
-    df_tx, product_df = prepare_product_level_df(df)
+        df_tx, product_df = prepare_product_level_df(df)
 
-    st.markdown("### 1. TOP-20 товаров по продажам")
-    top20_sales = product_df.sort_values("TotalSales", ascending=False).head(20)
-    fig1 = px.bar(
-        top20_sales,
-        x="TotalSales",
-        y="Description_clean",
-        orientation="h",
-        height=600
-    )
-    fig1.update_yaxes(autorange="reversed")
-    st.plotly_chart(fig1, use_container_width=True)
+        # 1. TOP-20 товаров по продажам
+        st.markdown("### 1. TOP-20 товаров по продажам")
+        top20_sales = product_df.sort_values("TotalSales", ascending=False).head(20)
+        fig1 = px.bar(
+            top20_sales,
+            x="TotalSales",
+            y="Description_clean",
+            orientation="h",
+            labels={"TotalSales": "Общее количество продаж", "Description_clean": "Товар"},
+            height=600
+        )
+        fig1.update_yaxes(autorange="reversed")
+        st.plotly_chart(fig1, use_container_width=True)
 
-    st.markdown("### 2. TOP-10 стран по количеству покупок")
-    country_sales = df_tx.groupby("Country")["Quantity"].sum().sort_values(ascending=False)
-    top_countries = country_sales.head(10).reset_index()
-    fig2 = px.bar(
-        top_countries,
-        x="Country",
-        y="Quantity",
-        height=400
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+        # 2. TOP-10 стран по количеству покупок
+        if "Country" in df_tx.columns:
+            st.markdown("### 2. TOP-10 стран по количеству покупок")
+            country_sales = df_tx.groupby("Country")["Quantity"].sum().sort_values(ascending=False)
+            top_countries = country_sales.head(10).reset_index()
+            fig2 = px.bar(
+                top_countries,
+                x="Country",
+                y="Quantity",
+                labels={"Country": "Страна", "Quantity": "Количество покупок"},
+                height=400
+            )
+            st.plotly_chart(fig2, use_container_width=True)
 
-    st.markdown("### 3. Распределение средних цен по товарам")
-    fig3 = px.histogram(
-        product_df,
-        x="AvgPrice",
-        nbins=50,
-        height=400
-    )
-    fig3.update_xaxes(range=[0, product_df["AvgPrice"].quantile(0.99)])
-    st.plotly_chart(fig3, use_container_width=True)
+        # 3. Распределение средних цен по товарам
+        st.markdown("### 3. Распределение средних цен по товарам")
+        fig3 = px.histogram(
+            product_df,
+            x="AvgPrice",
+            nbins=50,
+            labels={"AvgPrice": "Средняя цена товара"},
+            height=400
+        )
+        fig3.update_xaxes(range=[0, product_df["AvgPrice"].quantile(0.99)])
+        st.plotly_chart(fig3, use_container_width=True)
 
-    st.markdown("### 4. Динамика продаж по месяцам")
-    df_tx["InvoiceDate"] = pd.to_datetime(df_tx["InvoiceDate"])
-    df_tx["Month"] = df_tx["InvoiceDate"].dt.to_period("M")
-    monthly_sales = df_tx.groupby("Month")["Quantity"].sum().reset_index()
-    monthly_sales["Month"] = monthly_sales["Month"].astype(str)
+        # 4. Динамика продаж по месяцам
+        if "InvoiceDate" in df_tx.columns:
+            st.markdown("### 4. Динамика продаж по месяцам")
+            df_tx["InvoiceDate"] = pd.to_datetime(df_tx["InvoiceDate"])
+            df_tx["Month"] = df_tx["InvoiceDate"].dt.to_period("M")
+            monthly_sales = df_tx.groupby("Month")["Quantity"].sum().reset_index()
+            monthly_sales["Month"] = monthly_sales["Month"].astype(str)
 
-    fig4 = px.line(
-        monthly_sales,
-        x="Month",
-        y="Quantity",
-        height=400
-    )
-    st.plotly_chart(fig4, use_container_width=True)
+            fig4 = px.line(
+                monthly_sales,
+                x="Month",
+                y="Quantity",
+                labels={"Month": "Месяц", "Quantity": "Количество продаж"},
+                height=400
+            )
+            st.plotly_chart(fig4, use_container_width=True)
 
-    st.markdown("### 5. Word Cloud по товарам")
-    fig_wc = plot_wordcloud(product_df)
-    st.pyplot(fig_wc)
+        # 5. WordCloud
+        st.markdown("### 5. Облако слов по названиям товаров")
+        fig_wc = plot_wordcloud(product_df)
+        st.pyplot(fig_wc)
 
 # ===============================
 # TAB 2 — PREDICTIVE MODEL
