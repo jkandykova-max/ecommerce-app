@@ -26,9 +26,9 @@ def load_model_and_tools():
 model, tfidf, scaler = load_model_and_tools()
 
 # ПОДСТАВЬ СВОИ МЕТРИКИ!
-BEST_MODEL_NAME = "Random Forest"      # или Logistic Regression
-BEST_ACC = 0.85                        # поменяй на реальные значения
-BEST_F1 = 0.84                         # поменяй на реальные значения
+BEST_MODEL_NAME = "Random Forest"      
+BEST_ACC = 0.9107763615295481                        
+BEST_F1 = 0.9111880046136102                         
 
 # ===============================
 # 2. ФУНКЦИИ ДЛЯ РАБОТЫ С ДАННЫМИ
